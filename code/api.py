@@ -4,9 +4,10 @@ import numpy as np
 from PIL import Image
 from io import BytesIO
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='../templates')
 
-model = tf.keras.models.load_model("res/model.h5")
+
+model = tf.keras.models.load_model("../res/model.h5")
 class_labels = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
 
 
