@@ -6,8 +6,7 @@ from io import BytesIO
 
 app = Flask(__name__)
 
-# Load model
-model = tf.keras.models.load_model("model.h5")
+model = tf.keras.models.load_model("res/model.h5")
 class_labels = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
 
 
@@ -22,7 +21,6 @@ def preprocess_image(image):
 @app.route('/')
 def index():
     return render_template('index.html')
-
 
 @app.route('/predict', methods=['POST'])
 def predict():
