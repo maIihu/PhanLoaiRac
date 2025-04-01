@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phân Loại Rác</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        #preview { width: 300px; height: auto; margin: 10px; }
+        #video { width: 300px; }
+        canvas { display: none; }
+    </style>
+</head>
+<body>
+    <h1>Phân Loại Rác</h1>
+
+    <!-- Upload Ảnh -->
+    <input type="file" id="fileInput" accept="image/*">
+    <img id="preview" src="#" alt="Xem trước ảnh" style="display:none;">
+    <button onclick="uploadImage()">Dự Đoán</button>
+
+    <hr>
+
+    <!-- Chụp ảnh -->
+    <video id="video" autoplay></video>
+    <button onclick="captureImage()">Chụp Ảnh</button>
+    <canvas id="canvas"></canvas>
+
+    <h2>Kết Quả: <span id="result">Chưa có kết quả</span></h2>
+
+    <script>
+        const fileInput = document.getElementById("fileInput");
+        const preview = document.getElementById("preview");
+        const result = document.getElementById("result");
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const context = canvas.getContext("2d");
+
+        // Xem trước ảnh đã chọn
+        fileInput.addEventListener("change", function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = "block";
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Upload ảnh lên API
+        function uploadImage() {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert("Vui lòng chọn ảnh!");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            fetch("/predict", {
+                method: "POST",
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                result.innerText = `Loại: ${data.predicted_class} (${data.confidence.toFixed(2)}%)`;
+            })
+            .catch(error => console.error("Lỗi:", error));
+        }
+
+        // Mở camera
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => { video.srcObject = stream; })
+            .catch(error => console.error("Không thể truy cập camera:", error));
+
+        // Chụp ảnh từ camera
+        function captureImage() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(blob => {
+                const file = new File([blob], "captured.jpg", { type: "image/jpeg" });
+                const formData = new FormData();
+                formData.append("file", file);
+
+                fetch("/predict", {
+                    method: "POST",
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    result.innerText = `Loại: ${data.predicted_class} (${data.confidence.toFixed(2)}%)`;
+                })
+                .catch(error => console.error("Lỗi:", error));
+            }, "image/jpeg");
+        }
+    </script>
+</body>
+</html>
