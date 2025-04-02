@@ -6,40 +6,58 @@
     <title>Phân Loại Rác</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; }
-        #preview { width: 300px; height: auto; margin: 10px; }
-        #video { width: 300px; }
-        canvas { display: none; }
+        #preview { width: 300px; height: auto; margin: 10px; display: none; }
+        #croppedImages {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+        .cropped-image-container {
+            width: 150px;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #f9f9f9;
+        }
+        .cropped-image {
+            max-width: 100%;
+            max-height: 100%;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
     <h1>Phân Loại Rác</h1>
 
-    <!-- Upload Ảnh -->
     <input type="file" id="fileInput" accept="image/*">
-    <img id="preview" src="#" alt="Xem trước ảnh" style="display:none;">
-    <button onclick="uploadImage()">Dự Đoán</button>
+    <img id="preview" src="#" alt="Xem trước ảnh">
+    <button onclick="uploadImage()">Tách Vật Thể</button>
 
     <hr>
 
-    <!-- Chụp ảnh -->
-    <video id="video" autoplay></video>
-    <button onclick="captureImage()">Chụp Ảnh</button>
-    <canvas id="canvas"></canvas>
+    <div id="croppedImages"></div>
 
-    <h2>Kết Quả: <span id="result">Chưa có kết quả</span></h2>
+    <h2>Kết Quả Phân Loại: <span id="result">Chưa có kết quả</span></h2>
 
     <script>
         const fileInput = document.getElementById("fileInput");
         const preview = document.getElementById("preview");
         const result = document.getElementById("result");
-        const video = document.getElementById("video");
-        const canvas = document.getElementById("canvas");
-        const context = canvas.getContext("2d");
+        const croppedImagesDiv = document.getElementById("croppedImages");
 
-        // Xem trước ảnh đã chọn
         fileInput.addEventListener("change", function(event) {
             const file = event.target.files[0];
             if (file) {
+                // Gọi hàm xóa ảnh cũ và reset kết quả phân loại
+                clearOldImages();
+                result.innerText = "Chưa có kết quả";  // Reset kết quả phân loại
+
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     preview.src = e.target.result;
@@ -49,7 +67,24 @@
             }
         });
 
-        // Upload ảnh lên API
+        // Hàm xóa ảnh cũ trong thư mục
+        function clearOldImages() {
+            console.log("Requesting to clear old images...");
+            fetch("/clear_output_folder", {
+                method: "GET",  // Yêu cầu server xóa ảnh cũ
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log("Ảnh cũ đã được xóa.");
+                    croppedImagesDiv.innerHTML = '';  // Xóa phần hiển thị ảnh cũ
+                } else {
+                    console.error("Lỗi khi xóa ảnh cũ:", data.error);
+                }
+            })
+            .catch(error => console.error("Lỗi khi gửi yêu cầu xóa ảnh:", error));
+        }
+
         function uploadImage() {
             const file = fileInput.files[0];
             if (!file) {
@@ -60,43 +95,59 @@
             const formData = new FormData();
             formData.append("file", file);
 
-            fetch("/predict", {
+            fetch("/detect_objects", {
                 method: "POST",
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
-                result.innerText = `Loại: ${data.predicted_class} (${data.confidence.toFixed(2)}%)`;
+                if (data.error) {
+                    alert("Lỗi: " + data.error);
+                } else {
+                    // Sau khi nhận ảnh mới, gọi lại hàm hiển thị ảnh mới
+                    displayCroppedImages(data.cropped_images);
+                }
             })
             .catch(error => console.error("Lỗi:", error));
         }
 
-        // Mở camera
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => { video.srcObject = stream; })
-            .catch(error => console.error("Không thể truy cập camera:", error));
+        function displayCroppedImages(images) {
+            croppedImagesDiv.innerHTML = '';  // Làm mới danh sách ảnh
+            images.forEach(image => {
+                const container = document.createElement("div");
+                container.className = "cropped-image-container";
 
-        // Chụp ảnh từ camera
-        function captureImage() {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const img = document.createElement("img");
+                // Thêm tham số ngẫu nhiên vào URL ảnh để tránh cache
+                const uniqueImageUrl = `${image}?${new Date().getTime()}`;
+                img.src = uniqueImageUrl;
+                img.className = "cropped-image";
+                img.onclick = () => classifyImage(image);
 
-            canvas.toBlob(blob => {
-                const file = new File([blob], "captured.jpg", { type: "image/jpeg" });
+                container.appendChild(img);
+                croppedImagesDiv.appendChild(container);
+            });
+        }
+
+        async function classifyImage(imageUrl) {
+            try {
+                const response = await fetch(imageUrl);
+                const blob = await response.blob();
+                const file = new File([blob], "object.jpg", { type: "image/jpeg" });
+
                 const formData = new FormData();
                 formData.append("file", file);
 
-                fetch("/predict", {
+                const predictResponse = await fetch("/predict", {
                     method: "POST",
                     body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    result.innerText = `Loại: ${data.predicted_class} (${data.confidence.toFixed(2)}%)`;
-                })
-                .catch(error => console.error("Lỗi:", error));
-            }, "image/jpeg");
+                });
+
+                const data = await predictResponse.json();
+                result.innerText = `Loại: ${data.predicted_class} (${data.confidence.toFixed(2)}%)`;
+            } catch (error) {
+                console.error("Lỗi:", error);
+            }
         }
     </script>
 </body>

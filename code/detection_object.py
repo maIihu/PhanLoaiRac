@@ -12,7 +12,7 @@ def predict_image(image_path, model):
     return model(image, conf=0.05, iou=0.5, verbose=False)[0]
 
 
-def save_cropped_objects(image_path, results, output_folder='../assets/output'):
+def save_cropped_objects(image_path, results, output_folder='../static/assets/output'):
     os.makedirs(output_folder, exist_ok=True)
     image = cv2.imread(image_path)
 
