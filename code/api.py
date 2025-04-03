@@ -1,4 +1,3 @@
-import shutil
 from flask import Flask, render_template, request, jsonify
 import tensorflow as tf
 import numpy as np
@@ -7,7 +6,7 @@ import os
 import cv2
 from ultralytics import YOLO
 
-app = Flask(__name__, template_folder='../templates')
+app = Flask(__name__, template_folder="../templates", static_folder="static")
 
 # Tải mô hình phân loại rác
 class_labels = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
@@ -37,7 +36,7 @@ def save_cropped_objects(image_path, results):
         x1, y1, x2, y2 = map(int, box[:4])
         cropped_object = image[y1:y2, x1:x2]
         if cropped_object.size == 0:
-            continue  # Bỏ qua nếu cắt lỗi
+            continue
         output_path = os.path.join(output_folder, f"{os.path.splitext(os.path.basename(image_path))[0]}_obj{idx}.jpg")
         cv2.imwrite(output_path, cropped_object)
         saved_files.append(output_path)
@@ -58,6 +57,7 @@ def clear_output_folder():
         return jsonify({"success": True})
     else:
         return jsonify({"success": False, "error": "Output folder not found"})
+
 @app.route('/detect_objects', methods=['POST'])
 def detect_objects():
     if 'file' not in request.files:
@@ -66,15 +66,12 @@ def detect_objects():
     file = request.files['file']
     image = Image.open(file.stream).convert('RGB')
 
-    # Lưu ảnh mới
     image_path = os.path.join(output_folder, 'uploaded_image.jpg')
     image.save(image_path)
 
-    # Dự đoán với YOLO
     results = predict_image(image_path)
     cropped_images = save_cropped_objects(image_path, results)
 
-    # Chuyển đường dẫn thành URL hợp lệ
     cropped_images = [f"/static/assets/output/{os.path.basename(img)}" for img in cropped_images]
 
     if not cropped_images:
